@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام مضاربة البيتكوين مع تنبيهات تليجرام</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            transition: background-color 0.3s ease;
+        }
+        .container {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        body.flash-buy { background-color: #033a16; }
+        .container.flash-buy { border-color: #2ea043; box-shadow: 0 0 30px rgba(46, 160, 67, 0.6); }
+        
+        body.flash-sell { background-color: #4c1113; }
+        .container.flash-sell { border-color: #f85149; box-shadow: 0 0 30px rgba(248, 81, 73, 0.6); }
+
+        h2 {
+            text-align: center;
+            color: #f0883e;
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        .status {
+            text-align: center;
+            font-size: 11px;
+            color: #8b949e;
+            margin-bottom: 15px;
+        }
+        .dot {
+            height: 8px;
+            width: 8px;
+            background-color: #f85149;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 5px;
+        }
+        .dot.connected { background-color: #2ea043; }
+        
+        .price-box {
+            background-color: #21262d;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+        .price-title { font-size: 12px; color: #8b949e; }
+        .price-value { font-size: 26px; font-weight: bold; color: #ffffff; margin-top: 5px; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .card {
+            background-color: #21262d;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+        .card.bid { border-top: 3px solid #2ea043; }
+        .card.ask { border-top: 3px solid #f85149; }
+        .card-title { font-size: 11px; color: #8b949e; margin-bottom: 3px; }
+        .card-value { font-size: 15px; font-weight: bold; }
+        .bid .card-value { color: #2ea043; }
+        .ask .card-value { color: #f85149; }
+
+        .zones-box {
+            background-color: #21262d;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            font-size: 12px;
+        }
+        .zone-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        .zone-label { color: #8b949e; }
+        .zone-val { font-weight: bold; }
+        .supply { color: #f85149; }
+        .demand { color: #2ea043; }
+
+        .targets-box {
+            background-color: #1f242c;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            font-size: 12px;
+        }
+        .target-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        .target-label { color: #8b949e; }
+        .tp-val { color: #2ea043; font-weight: bold; }
+        .sl-val { color: #f85149; font-weight: bold; }
+
+        .signal-box {
+            background-color: #1f242c;
+            border: 1px dashed #f0883e;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+        .signal-title { font-size: 10px; color: #8b949e; margin-bottom: 3px; }
+        .signal-action { font-size: 14px; font-weight: bold; color: #f0883e; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="main-container">
+    <h2>نظام تليجرام لمضاربة البيتكوين</h2>
+    <div class="status">
+        الحالة: <span id="status-text">جاري الاتصال...</span>
+        <span id="connection-dot" class="dot"></span>
+    </div>
+
+    <div class="price-box">
+        <div class="price-title">السعر الفوري الحالي (مطابق لـ MT5)</div>
+        <div id="live-price" class="price-value">--</div>
+    </div>
+
+    <div class="grid">
+        <div class="card bid">
+            <div class="card-title">سعر الطلب (Bid)</div>
+            <div id="bid-price" class="card-value">--</div>
+        </div>
+        <div class="card ask">
+            <div class="card-title">سعر العرض (Ask)</div>
+            <div id="ask-price" class="card-value">--</div>
+        </div>
+    </div>
+
+    <div class="zones-box">
+        <div class="zone-row">
+            <span class="zone-label">منطقة العرض (مقاومة):</span>
+            <span id="supply-zone" class="zone-val supply">--</span>
+        </div>
+        <div class="zone-row">
+            <span class="zone-label">منطقة الطلب (دعم):</span>
+            <span id="demand-zone" class="zone-val demand">--</span>
+        </div>
+    </div>
+
+    <div class="targets-box">
+        <div class="target-row">
+            <span class="target-label">هدف الربح الأول (TP 1):</span>
+            <span id="tp-val" class="tp-val">--</span>
+        </div>
+        <div class="target-row">
+            <span class="target-label">وقف الخسارة المقترح (SL):</span>
+            <span id="sl-val" class="sl-val">--</span>
+        </div>
+    </div>
+
+    <div class="signal-box">
+        <div class="signal-title">توجيه المضاربة اللحظي</div>
+        <div id="signal-text" class="signal-action">جاري تحليل السيولة...</div>
+    </div>
+</div>
+
+<script>
+    const wsUrl = 'wss://stream.binance.com:9443/ws/btcusdt@bookTicker';
+    const priceOffset = -40; // فارق السعر لمطابقة MT5
+
+    // تم إدخال بيانات تليجرام الخاصة بك بنجاح
+    const telegramToken = '8547422933:AAG8fuNsOTovdoJ3PcHProubn2Knrinkhmw';
+    const chatId = '-1003900259258';
+
+    let lastAlertState = 'neutral'; 
+    let lastAlertTime = 0;
+
+    function sendTelegramAlert(message) {
+        const now = Date.now();
+        // منع تكرار الإرسال المتواصل (إرسال إشعار جديد كحد أدنى كل 3 دقائق لنفس الحالة)
+        if (now - lastAlertTime < 180000) return; 
+
+        const url = `https://api.telegram.org/bot${telegramToken}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(message)}`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if(data.ok) {
+                    lastAlertTime = now;
+                }
+            })
+            .catch(error => console.error('خطأ في إرسال التنبيه:', error));
+    }
+
+    const bodyElement = document.body;
+    const containerElement = document.getElementById('main-container');
+    const priceElement = document.getElementById('live-price');
+    const bidElement = document.getElementById('bid-price');
+    const askElement = document.getElementById('ask-price');
+    const statusText = document.getElementById('status-text');
+    const connectionDot = document.getElementById('connection-dot');
+    
+    const supplyZoneElement = document.getElementById('supply-zone');
+    const demandZoneElement = document.getElementById('demand-zone');
+    const tpElement = document.getElementById('tp-val');
+    const slElement = document.getElementById('sl-val');
+    const signalTextElement = document.getElementById('signal-text');
+
+    let basePriceSet = false;
+    let dynamicSupply = 0;
+    let dynamicDemand = 0;
+
+    function connectWebSocket() {
+        const ws = new WebSocket(wsUrl);
+
+        ws.onopen = function() {
+            statusText.innerText = 'متصل بالسوق الحقيقي';
+            connectionDot.classList.add('connected');
+        };
+
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            const bestBid = parseFloat(data.b) + priceOffset;
+            const bestAsk = parseFloat(data.a) + priceOffset;
+            const midPrice = (bestBid + bestAsk) / 2;
+
+            if (!basePriceSet) {
+                dynamicSupply = midPrice + 150; 
+                dynamicDemand = midPrice - 150; 
+                basePriceSet = true;
+            }
+
+            if (midPrice > dynamicSupply) {
+                dynamicSupply = midPrice + 100;
+                dynamicDemand = midPrice - 200;
+            } else if (midPrice < dynamicDemand) {
+                dynamicDemand = midPrice - 100;
+                dynamicSupply = midPrice + 200;
+            }
+
+            bidElement.innerText = `$${bestBid.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            askElement.innerText = `$${bestAsk.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            priceElement.innerText = `$${midPrice.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+
+            supplyZoneElement.innerText = `$${dynamicSupply.toLocaleString('en-US', {maximumFractionDigits: 0})}`;
+            demandZoneElement.innerText = `$${dynamicDemand.toLocaleString('en-US', {maximumFractionDigits: 0})}`;
+
+            let distanceToDemand = midPrice - dynamicDemand;
+            let distanceToSupply = dynamicSupply - midPrice;
+
+            bodyElement.classList.remove('flash-buy', 'flash-sell');
+            containerElement.classList.remove('flash-buy', 'flash-sell');
+
+            if (distanceToDemand < 40) {
+                let tp = midPrice + 220;
+                let sl = dynamicDemand - 60;
+                
+                tpElement.innerText = `$${tp.toFixed(0)}`;
+                slElement.innerText = `$${sl.toFixed(0)}`;
+
+                bodyElement.classList.add('flash-buy');
+                containerElement.classList.add('flash-buy');
+                signalTextElement.innerHTML = "🟢 شراء (Buy) - ارتداد من الدعم";
+
+                if (lastAlertState !== 'buy') {
+                    lastAlertState = 'buy';
+                    sendTelegramAlert(`🟢 تنبيه صفقة شراء (BTC)\nالسعر الحالي: $${midPrice.toFixed(2)}\nمنطقة الطلب: $${dynamicDemand.toFixed(0)}\nهدف الربح (TP): $${tp.toFixed(0)}\nوقف الخسارة (SL): $${sl.toFixed(0)}`);
+                }
+            } 
+            else if (distanceToSupply < 40) {
+                let tp = midPrice - 220;
+                let sl = dynamicSupply + 60;
+
+                tpElement.innerText = `$${tp.toFixed(0)}`;
+                slElement.innerText = `$${sl.toFixed(0)}`;
+
+                bodyElement.classList.add('flash-sell');
+                containerElement.classList.add('flash-sell');
+                signalTextElement.innerHTML = "🔴 بيع/جني أرباح (Sell) - ملامسة المقاومة";
+
+                if (lastAlertState !== 'sell') {
+                    lastAlertState = 'sell';
+                    sendTelegramAlert(`🔴 تنبيه صفقة بيع (BTC)\nالسعر الحالي: $${midPrice.toFixed(2)}\nمنطقة العرض: $${dynamicSupply.toFixed(0)}\nهدف الربح (TP): $${tp.toFixed(0)}\nوقف الخسارة (SL): $${sl.toFixed(0)}`);
+                }
+            } 
+            else {
+                tpElement.innerText = `حسب القمة/القاع القادم`;
+                slElement.innerText = `انتظر الاقتراب`;
+                signalTextElement.innerHTML = "⏳ منتصف النطاق (انتظر الأطراف)";
+                lastAlertState = 'neutral';
+            }
+        };
+
+        ws.onerror = function() {
+            statusText.innerText = 'خطأ في الاتصال';
+            connectionDot.classList.remove('connected');
+        };
+
+        ws.onclose = function() {
+            statusText.innerText = 'انقطع الاتصال، جاري إعادة المحاولة...';
+            connectionDot.classList.remove('connected');
+            setTimeout(connectWebSocket, 3000);
+        };
+    }
+
+    connectWebSocket();
+</script>
+
+</body>
+</html>
