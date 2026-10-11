@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام مضاربة البيتكوين مع تنبيهات تليجرام</title>
+    <title>نظام SMC وسحب السيولة (السكالبينج الاحترافي)</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -37,8 +37,14 @@
             text-align: center;
             color: #f0883e;
             margin-top: 0;
-            margin-bottom: 10px;
-            font-size: 18px;
+            margin-bottom: 5px;
+            font-size: 17px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #8b949e;
+            font-size: 11px;
+            margin-bottom: 15px;
         }
         .status {
             text-align: center;
@@ -85,23 +91,6 @@
         .bid .card-value { color: #2ea043; }
         .ask .card-value { color: #f85149; }
 
-        .zones-box {
-            background-color: #21262d;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 12px;
-            font-size: 12px;
-        }
-        .zone-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 6px;
-        }
-        .zone-label { color: #8b949e; }
-        .zone-val { font-weight: bold; }
-        .supply { color: #f85149; }
-        .demand { color: #2ea043; }
-
         .targets-box {
             background-color: #1f242c;
             border: 1px solid #30363d;
@@ -133,7 +122,9 @@
 <body>
 
 <div class="container" id="main-container">
-    <h2>نظام تليجرام لمضاربة البيتكوين</h2>
+    <h2>نظام SMC وسحب السيولة (SMC Scalp)</h2>
+    <div class="subtitle">اصطياد الارتداد بعد ضرب السيولة</div>
+    
     <div class="status">
         الحالة: <span id="status-text">جاري الاتصال...</span>
         <span id="connection-dot" class="dot"></span>
@@ -155,31 +146,20 @@
         </div>
     </div>
 
-    <div class="zones-box">
-        <div class="zone-row">
-            <span class="zone-label">منطقة العرض (مقاومة):</span>
-            <span id="supply-zone" class="zone-val supply">--</span>
-        </div>
-        <div class="zone-row">
-            <span class="zone-label">منطقة الطلب (دعم):</span>
-            <span id="demand-zone" class="zone-val demand">--</span>
-        </div>
-    </div>
-
     <div class="targets-box">
         <div class="target-row">
-            <span class="target-label">هدف الربح الأول (TP 1):</span>
+            <span class="target-label">هدف الربح (TP):</span>
             <span id="tp-val" class="tp-val">--</span>
         </div>
         <div class="target-row">
-            <span class="target-label">وقف الخسارة المقترح (SL):</span>
+            <span class="target-label">وقف الخسارة المحمي (SL):</span>
             <span id="sl-val" class="sl-val">--</span>
         </div>
     </div>
 
     <div class="signal-box">
-        <div class="signal-title">توجيه المضاربة اللحظي</div>
-        <div id="signal-text" class="signal-action">جاري تحليل السيولة...</div>
+        <div class="signal-title">توجيه التداول الذكي</div>
+        <div id="signal-text" class="signal-action">جاري مراقبة مناطق السيولة...</div>
     </div>
 </div>
 
@@ -187,17 +167,17 @@
     const wsUrl = 'wss://stream.binance.com:9443/ws/btcusdt@bookTicker';
     const priceOffset = -40; // فارق السعر لمطابقة MT5
 
-    // تم إدخال بيانات تليجرام الخاصة بك بنجاح
+    // إعدادات تليجرام الخاصة بك
     const telegramToken = '8547422933:AAG8fuNsOTovdoJ3PcHProubn2Knrinkhmw';
     const chatId = '-1003900259258';
 
     let lastAlertState = 'neutral'; 
     let lastAlertTime = 0;
+    let priceHistory = [];
 
     function sendTelegramAlert(message) {
         const now = Date.now();
-        // منع تكرار الإرسال المتواصل (إرسال إشعار جديد كحد أدنى كل 3 دقائق لنفس الحالة)
-        if (now - lastAlertTime < 180000) return; 
+        if (now - lastAlertTime < 120000) return; // منع التكرار لمدة دقيقتين
 
         const url = `https://api.telegram.org/bot${telegramToken}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(message)}`;
         
@@ -219,21 +199,15 @@
     const statusText = document.getElementById('status-text');
     const connectionDot = document.getElementById('connection-dot');
     
-    const supplyZoneElement = document.getElementById('supply-zone');
-    const demandZoneElement = document.getElementById('demand-zone');
     const tpElement = document.getElementById('tp-val');
     const slElement = document.getElementById('sl-val');
     const signalTextElement = document.getElementById('signal-text');
-
-    let basePriceSet = false;
-    let dynamicSupply = 0;
-    let dynamicDemand = 0;
 
     function connectWebSocket() {
         const ws = new WebSocket(wsUrl);
 
         ws.onopen = function() {
-            statusText.innerText = 'متصل بالسوق الحقيقي';
+            statusText.innerText = 'متصل بنظام SMC الحقيقي';
             connectionDot.classList.add('connected');
         };
 
@@ -244,69 +218,64 @@
             const bestAsk = parseFloat(data.a) + priceOffset;
             const midPrice = (bestBid + bestAsk) / 2;
 
-            if (!basePriceSet) {
-                dynamicSupply = midPrice + 150; 
-                dynamicDemand = midPrice - 150; 
-                basePriceSet = true;
-            }
-
-            if (midPrice > dynamicSupply) {
-                dynamicSupply = midPrice + 100;
-                dynamicDemand = midPrice - 200;
-            } else if (midPrice < dynamicDemand) {
-                dynamicDemand = midPrice - 100;
-                dynamicSupply = midPrice + 200;
-            }
-
             bidElement.innerText = `$${bestBid.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
             askElement.innerText = `$${bestAsk.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
             priceElement.innerText = `$${midPrice.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
 
-            supplyZoneElement.innerText = `$${dynamicSupply.toLocaleString('en-US', {maximumFractionDigits: 0})}`;
-            demandZoneElement.innerText = `$${dynamicDemand.toLocaleString('en-US', {maximumFractionDigits: 0})}`;
+            // تخزين الأسعار لمراقبة السلوك (آخر 5 تحديثات سريعة)
+            priceHistory.push(midPrice);
+            if (priceHistory.length > 6) {
+                priceHistory.shift();
+            }
 
-            let distanceToDemand = midPrice - dynamicDemand;
-            let distanceToSupply = dynamicSupply - midPrice;
+            if (priceHistory.length < 6) return;
+
+            // قياس نمط السيولة: هل حدث هبوط حاد (سحب سيولة قاع) ثم ارتداد صعودي؟ أو صعود حاد (سحب سيولة قمة) ثم هبوط؟
+            let minPrice = Math.min(...priceHistory);
+            let maxPrice = Math.max(...priceHistory);
+            let spreadRange = maxPrice - minPrice;
 
             bodyElement.classList.remove('flash-buy', 'flash-sell');
             containerElement.classList.remove('flash-buy', 'flash-sell');
 
-            if (distanceToDemand < 40) {
-                let tp = midPrice + 220;
-                let sl = dynamicDemand - 60;
+            // شرط الشراء: إذا نزل السعر بشكل حاد (سحب السيولة السفلى) ثم ارتد وأغلق أعلى القاع بقليل (منطقة الخصم ودعم صلب)
+            if (midPrice <= minPrice + (spreadRange * 0.3) && midPrice > minPrice) {
+                let tp = midPrice + 120;
+                let sl = minPrice - 40; // وقف الخسارة محمي تحت القاع المسحوب مباشرة
                 
                 tpElement.innerText = `$${tp.toFixed(0)}`;
                 slElement.innerText = `$${sl.toFixed(0)}`;
 
                 bodyElement.classList.add('flash-buy');
                 containerElement.classList.add('flash-buy');
-                signalTextElement.innerHTML = "🟢 شراء (Buy) - ارتداد من الدعم";
+                signalTextElement.innerHTML = "🟢 شراء عكسي (ارتداد من سحب السيولة)";
 
                 if (lastAlertState !== 'buy') {
                     lastAlertState = 'buy';
-                    sendTelegramAlert(`🟢 تنبيه صفقة شراء (BTC)\nالسعر الحالي: $${midPrice.toFixed(2)}\nمنطقة الطلب: $${dynamicDemand.toFixed(0)}\nهدف الربح (TP): $${tp.toFixed(0)}\nوقف الخسارة (SL): $${sl.toFixed(0)}`);
+                    sendTelegramAlert(`🛡️ تنبيه SMC شراء (مضمون الارتداد)\nالسعر الحالي: $${midPrice.toFixed(2)}\nتم سحب سيولة القاع وارتداد السعر\nهدف الربح (TP): $${tp.toFixed(0)}\nوقف الخسارة المحمي (SL): $${sl.toFixed(0)}`);
                 }
             } 
-            else if (distanceToSupply < 40) {
-                let tp = midPrice - 220;
-                let sl = dynamicSupply + 60;
+            // شرط البيع: إذا صعد السعر بشكل حاد (سحب السيولة العليا) ثم بدأ بالارتداد للأسفل
+            else if (midPrice >= maxPrice - (spreadRange * 0.3) && midPrice < maxPrice) {
+                let tp = midPrice - 120;
+                let sl = maxPrice + 40; // وقف الخسارة محمي فوق القمة المسحوبة مباشرة
 
                 tpElement.innerText = `$${tp.toFixed(0)}`;
                 slElement.innerText = `$${sl.toFixed(0)}`;
 
                 bodyElement.classList.add('flash-sell');
                 containerElement.classList.add('flash-sell');
-                signalTextElement.innerHTML = "🔴 بيع/جني أرباح (Sell) - ملامسة المقاومة";
+                signalTextElement.innerHTML = "🔴 بيع عكسي (ارتداد من سحب السيولة)";
 
                 if (lastAlertState !== 'sell') {
                     lastAlertState = 'sell';
-                    sendTelegramAlert(`🔴 تنبيه صفقة بيع (BTC)\nالسعر الحالي: $${midPrice.toFixed(2)}\nمنطقة العرض: $${dynamicSupply.toFixed(0)}\nهدف الربح (TP): $${tp.toFixed(0)}\nوقف الخسارة (SL): $${sl.toFixed(0)}`);
+                    sendTelegramAlert(`🛡️ تنبيه SMC بيع (مضمون الارتداد)\nالسعر الحالي: $${midPrice.toFixed(2)}\nتم سحب سيولة القمة وارتداد السعر\nهدف الربح (TP): $${tp.toFixed(0)}\nوقف الخسارة المحمي (SL): $${sl.toFixed(0)}`);
                 }
             } 
             else {
-                tpElement.innerText = `حسب القمة/القاع القادم`;
-                slElement.innerText = `انتظر الاقتراب`;
-                signalTextElement.innerHTML = "⏳ منتصف النطاق (انتظر الأطراف)";
+                tpElement.innerText = `بانتظار تأكيد الارتداد`;
+                slElement.innerText = `--`;
+                signalTextElement.innerHTML = "⏳ مراقبة صانع السوق (تجنب الفخاخ)";
                 lastAlertState = 'neutral';
             }
         };
